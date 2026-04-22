@@ -21,6 +21,7 @@ from datasets import DatasetDict, ReadInstruction, load_dataset, load_from_disk
 from datasets.config import DATASET_STATE_JSON_FILENAME
 from datasets.download.download_manager import DownloadMode
 from datasets.utils.info_utils import VerificationMode
+from huggingface_hub import ModelCard, ModelCardData
 from optuna import Trial
 from psutil import Process
 from questionary import Choice, Style
@@ -311,6 +312,55 @@ def get_readme_intro(
 -----
 
 """
+
+
+HERETIC_CARD_TAGS = ("heretic", "uncensored", "decensored", "abliterated")
+
+
+def build_heretic_model_card(
+    settings: Settings,
+    trial: Trial,
+    base_refusals: int,
+    bad_prompts: list[Prompt],
+) -> ModelCard:
+    """Builds a Heretic-tagged ModelCard for a decensored model.
+
+    Loads the base model's card from its local path (if `settings.model` is a
+    directory containing a README) or from the Hugging Face Hub, prepends the
+    Heretic abliteration summary, and appends the Heretic tags. If no source
+    card can be located (e.g. the Hub model has no README, or the network is
+    unavailable), a minimal card containing only the Heretic summary is
+    returned so that the save-to-local path always produces a README.
+    """
+    intro = get_readme_intro(settings, trial, base_refusals, bad_prompts)
+
+    card: ModelCard | None = None
+    model_path = Path(settings.model)
+    if model_path.exists():
+        card_path = model_path / huggingface_hub.constants.REPOCARD_NAME
+        if card_path.exists():
+            card = ModelCard.load(card_path)
+    else:
+        try:
+            card = ModelCard.load(settings.model)
+        except Exception:
+            # Missing README, offline, or other upstream issue — fall back to
+            # a minimal card rather than failing the save/upload action.
+            card = None
+
+    if card is None:
+        card = ModelCard(intro)
+        card.data = ModelCardData(tags=list(HERETIC_CARD_TAGS))
+        return card
+
+    if card.data is None:
+        card.data = ModelCardData()
+    if card.data.tags is None:
+        card.data.tags = []
+    for tag in HERETIC_CARD_TAGS:
+        card.data.tags.append(tag)
+    card.text = intro + card.text
+    return card
 
 
 def generate_config_toml(settings: Settings) -> str:

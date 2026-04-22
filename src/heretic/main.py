@@ -63,6 +63,7 @@ from .evaluator import Evaluator
 from .model import AbliterationParameters, Model, get_model_class
 from .system import empty_cache, get_accelerator_info
 from .utils import (
+    build_heretic_model_card,
     format_duration,
     get_readme_intro,
     get_trial_parameters,
@@ -786,6 +787,21 @@ def run():
                                 del merged_model
                                 empty_cache()
                                 model.tokenizer.save_pretrained(save_directory)
+
+                            # Generate a model card next to the saved weights so
+                            # users who export locally (e.g. to upload manually
+                            # later) get the same abliteration summary as the
+                            # "Upload to Hugging Face" action produces.
+                            local_card = build_heretic_model_card(
+                                settings,
+                                trial,
+                                evaluator.base_refusals,
+                                evaluator.bad_prompts,
+                            )
+                            local_card.save(
+                                Path(save_directory)
+                                / huggingface_hub.constants.REPOCARD_NAME
+                            )
 
                             print(f"Model saved to [bold]{save_directory}[/].")
 
